@@ -137,6 +137,19 @@ async def get_tags_for_entry(entry_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/tags")
+async def get_all_tags():
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, entry_id, sentence_index, tag FROM tags")
+        rows = cursor.fetchall()
+        tags = [{"id": row[0], "entry_id": row[1], "sentence_index": row[2], "tag": row[3]} for row in rows]
+        conn.close()
+        return tags
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/tags/{tag_id}")
 async def delete_tag(tag_id: int):
     try:
