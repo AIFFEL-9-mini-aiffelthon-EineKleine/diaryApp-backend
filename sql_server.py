@@ -33,16 +33,30 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
     """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id INTEGER NOT NULL,
+            sentence_index INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            FOREIGN KEY (entry_id) REFERENCES entries(id) ON DELETE CASCADE
+        );
+    """)
     conn.commit()
     conn.close()
 
 init_db()
 
-# Define the data model
+# Define the data models
 class DiaryEntry(BaseModel):
     content: str
 
-# CRUD Endpoints
+class Tag(BaseModel):
+    entry_id: int
+    sentence_index: int
+    tag: str
+
+# CRUD Endpoints for Diary Entries
 @app.post("/api/diary")
 async def create_diary_entry(entry: DiaryEntry):
     try:
@@ -92,4 +106,50 @@ async def delete_diary_entry(entry_id: int):
         return {"message": "Diary entry deleted."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
+
+# CRUD Endpoints for Tags
+@app.post("/api/tags")
+async def create_tag(tag: Tag):
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO tags (entry_id, sentence_index, tag) VALUES (?, ?, ?)",
+            (tag.entry_id, tag.sentence_index, tag.tag)
+        )
+        conn.commit()
+        tag_id = cursor.lastrowid
+        conn.close()
+        return {"message": "Tag created.", "tag_id": tag_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tags/{entry_id}")
+async def get_tags_for_entry(entry_id: int):
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, sentence_index, tag FROM tags WHERE entry_id = ?", (entry_id,))
+        rows = cursor.fetchall()
+        tags = [{"id": row[0], "sentence_index": row[1], "tag": row[2]} for row in rows]
+        conn.close()
+        return tags
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/tags/{tag_id}")
+async def delete_tag(tag_id: int):
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+        if cursor.rowcount == 0:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Tag not found.")
+        conn.commit()
+        conn.close()
+        return {"message": "Tag deleted."}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
